@@ -3,6 +3,10 @@
 The update notice's news are **auto-detected from git** (new commits, grouped by area). This file
 is only a fallback for the case git goes away. Format: `## X.Y.Z` + bullets `- …`, newest first.
 
+## 1.7.5
+- Windows: fixed the embedded PowerShell here-string terminator so the setup script parses completely after the quoting fix.
+- Release: rebuilt `LanIdeSetup.exe` with the corrected installer and SHA256 checksum.
+
 ## 1.7.4
 - Windows: fixed the setup bootstrapper's PowerShell quoting so the embedded installer parses and can pass repository values safely into WSL.
 - Release: setup builds are pinned to this release and published with a SHA256 checksum.

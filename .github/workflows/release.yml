@@ -6,7 +6,7 @@ on:
       tag:
         description: Release tag to create/update
         required: true
-        default: v1.7.3
+        default: v1.7.5
       prerelease:
         description: Mark as prerelease
         type: boolean
@@ -31,7 +31,7 @@ jobs:
         run: |
           $tag = '${{ github.event.inputs.tag }}'
           if (-not $tag) { $tag = $env:GITHUB_REF_NAME }
-          if (-not $tag) { $tag = 'v1.7.4' }
+          if (-not $tag) { $tag = 'v1.7.5' }
           $pre = '${{ github.event.inputs.prerelease }}'
           if (-not $pre) { $pre = 'false' }
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append

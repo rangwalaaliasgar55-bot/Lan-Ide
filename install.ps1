@@ -71,28 +71,31 @@ function Invoke-LinuxInstall {
     Write-Step 'Installing Lan Ide inside WSL (~/lan-ide, full Python deps)…'
     $repoUrlSh = ConvertTo-ShSingleQuote $RepoUrl
     $repoRefSh = ConvertTo-ShSingleQuote $RepoRef
-    $inner = @'
-set -euo pipefail
-export DEBIAN_FRONTEND=noninteractive
-REPO="$HOME/lan-ide"
-REPO_URL=__REPO_URL__
-REPO_REF=__REPO_REF__
-if [ ! -f "$REPO/plotspace/main.py" ]; then
-  if command -v sudo >/dev/null 2>&1; then
-    sudo apt-get update -y
-    sudo apt-get install -y git curl
-  else
-    apt-get update -y
-    apt-get install -y git curl
-  fi
-  if [ -n "$REPO_REF" ]; then
-    git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$REPO"
-  else
-    git clone --depth 1 "$REPO_URL" "$REPO"
-  fi
-fi
-LAN_IDE_REPO_URL="$REPO_URL" LAN_IDE_REF="$REPO_REF" bash "$REPO/install.sh" --no-start
-'@
+    # Build the Linux script as an array instead of a here-string. This keeps
+    # the installer valid in Windows PowerShell, whose here-string terminator
+    # has strict column-one rules.
+    $inner = @(
+        'set -euo pipefail'
+        'export DEBIAN_FRONTEND=noninteractive'
+        'REPO="$HOME/lan-ide"'
+        'REPO_URL=__REPO_URL__'
+        'REPO_REF=__REPO_REF__'
+        'if [ ! -f "$REPO/plotspace/main.py" ]; then'
+        '  if command -v sudo >/dev/null 2>&1; then'
+        '    sudo apt-get update -y'
+        '    sudo apt-get install -y git curl'
+        '  else'
+        '    apt-get update -y'
+        '    apt-get install -y git curl'
+        '  fi'
+        '  if [ -n "$REPO_REF" ]; then'
+        '    git clone --depth 1 --branch "$REPO_REF" "$REPO_URL" "$REPO"'
+        '  else'
+        '    git clone --depth 1 "$REPO_URL" "$REPO"'
+        '  fi'
+        'fi'
+        'LAN_IDE_REPO_URL="$REPO_URL" LAN_IDE_REF="$REPO_REF" bash "$REPO/install.sh" --no-start'
+    ) -join "`n"
     $inner = $inner.Replace('__REPO_URL__', $repoUrlSh).Replace('__REPO_REF__', $repoRefSh)
     $inner = $inner -replace "`r`n", "`n"
     & wsl.exe -- bash -lc $inner

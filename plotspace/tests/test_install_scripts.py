@@ -100,6 +100,10 @@ def test_install_ps1_cotiza_valores_para_bash_sin_sintaxis_de_otro_shell():
     src = _leer(_PS1)
     assert '$escaped = $Value.Replace("\'", "\'\\\'\'")' in src
     assert '$Value -replace "\'", "\'\\"\'\\"\'"' not in src
+    # Keep the WSL script free of here-strings, whose terminator rules are
+    # easy to violate when the setup script is embedded in an EXE.
+    assert "$inner = @(" in src
+    assert "'@" not in src
 
 
 def test_install_ps1_instala_wsl_y_deja_acceso_en_el_escritorio():
