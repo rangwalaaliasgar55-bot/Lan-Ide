@@ -11,7 +11,11 @@
 $ErrorActionPreference = 'Stop'
 $RepoUrl = if ($env:LAN_IDE_REPO_URL) { $env:LAN_IDE_REPO_URL } else { 'https://github.com/rangwalaaliasgar55-bot/Lan-Ide.git' }
 $RepoRef = if ($env:LAN_IDE_REF) { $env:LAN_IDE_REF } else { '' }
-$RawInstall = 'https://raw.githubusercontent.com/rangwalaaliasgar55-bot/Lan-Ide/main/install.ps1'
+$RawInstall = if ($RepoRef) {
+    "https://raw.githubusercontent.com/rangwalaaliasgar55-bot/Lan-Ide/$RepoRef/install.ps1"
+} else {
+    'https://raw.githubusercontent.com/rangwalaaliasgar55-bot/Lan-Ide/main/install.ps1'
+}
 
 function ConvertTo-ShSingleQuote([string]$Value) {
     # A POSIX shell single quote is escaped by ending the quote, writing an

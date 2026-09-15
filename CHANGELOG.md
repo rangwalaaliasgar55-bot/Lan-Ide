@@ -3,6 +3,11 @@
 The update notice's news are **auto-detected from git** (new commits, grouped by area). This file
 is only a fallback for the case git goes away. Format: `## X.Y.Z` + bullets `- …`, newest first.
 
+## 1.7.9
+- Windows: pin the reboot/retry command to the exact release embedded in the setup executable instead of the moving default branch.
+- Windows: preserve correct Bash quoting when reading the Desktop launcher from WSL.
+- Release: rebuilt `LanIdeSetup.exe` with the corrected installer and SHA256 checksum.
+
 ## 1.7.8
 - Windows: validate `install.ps1` with the Windows PowerShell 5.1 parser before publishing; the release job also has a timeout to prevent hung setup validation.
 - Windows: write the extracted installer with a UTF-8 BOM and ASCII-only source for reliable Windows PowerShell parsing.

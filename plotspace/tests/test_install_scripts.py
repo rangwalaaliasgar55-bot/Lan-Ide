@@ -131,6 +131,18 @@ def test_install_ps1_es_ascii_para_evitar_fallos_de_codificacion():
     assert all(byte < 128 for byte in raw)
 
 
+def test_install_ps1_reintento_de_reinicio_apunta_al_release_embebido():
+    src = _leer(_PS1)
+    assert 'https://raw.githubusercontent.com/rangwalaaliasgar55-bot/Lan-Ide/$RepoRef/install.ps1' in src
+    assert 'main/install.ps1' in src
+
+
+def test_install_ps1_copia_el_launcher_con_comillas_bash_validas():
+    src = _leer(_PS1)
+    assert "bash -lc 'cat \"$HOME/lan-ide/scripts/abrir-lanide-app.bat\"'" in src
+    assert "bash -lc 'cat \\\"$HOME/lan-ide/scripts/abrir-lanide-app.bat\\\"'" not in src
+
+
 def test_install_ps1_no_promete_motor_nativo_windows():
 
     src = _leer(_PS1).lower()
