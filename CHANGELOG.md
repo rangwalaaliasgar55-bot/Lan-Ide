@@ -3,6 +3,11 @@
 The update notice's news are **auto-detected from git** (new commits, grouped by area). This file
 is only a fallback for the case git goes away. Format: `## X.Y.Z` + bullets `- …`, newest first.
 
+## 1.7.6
+- Windows: validate the exact PowerShell script embedded in `LanIdeSetup.exe` with the Windows parser before building, preventing broken setup releases.
+- Windows: hardened the WSL command construction to avoid here-string parsing failures.
+- Release: rebuilt `LanIdeSetup.exe` with the corrected installer and SHA256 checksum.
+
 ## 1.7.5
 - Windows: fixed the embedded PowerShell here-string terminator so the setup script parses completely after the quoting fix.
 - Release: rebuilt `LanIdeSetup.exe` with the corrected installer and SHA256 checksum.

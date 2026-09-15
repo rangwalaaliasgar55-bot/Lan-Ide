@@ -24,6 +24,23 @@ $Prelude = @"
 
 "@
 $InstallScript = $Prelude + $InstallSource
+
+# Parse the exact script that will be embedded before compiling the EXE. The
+# Windows PowerShell parser catches errors that Linux-side tests cannot see.
+$tokens = $null
+$parseErrors = $null
+[System.Management.Automation.Language.Parser]::ParseInput(
+    $InstallScript,
+    [ref]$tokens,
+    [ref]$parseErrors
+) | Out-Null
+if ($parseErrors.Count -gt 0) {
+    $messages = ($parseErrors | ForEach-Object {
+        "line $($_.Extent.StartLineNumber), column $($_.Extent.StartColumnNumber): $($_.Message)"
+    }) -join [Environment]::NewLine
+    throw "Embedded install.ps1 has PowerShell parse errors:`n$messages"
+}
+
 $InstallScriptBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($InstallScript))
 
 $Template = Get-Content (Join-Path $PSScriptRoot 'LanIdeSetup.cs.in') -Raw

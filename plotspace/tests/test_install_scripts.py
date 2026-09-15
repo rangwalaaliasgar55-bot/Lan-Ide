@@ -115,6 +115,12 @@ def test_install_ps1_instala_wsl_y_deja_acceso_en_el_escritorio():
     assert 'rangwalaaliasgar55-bot/Lan-Ide' in src
 
 
+def test_build_setup_valida_el_script_que_embebe():
+    build = _leer(os.path.join(_RAIZ, 'packaging', 'windows', 'build-setup.ps1'))
+    assert 'Parser]::ParseInput' in build
+    assert '$parseErrors.Count' in build
+
+
 def test_install_ps1_no_promete_motor_nativo_windows():
     src = _leer(_PS1).lower()
     assert 'conpty' not in src
