@@ -1,0 +1,263 @@
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Reflection;
+using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+
+[assembly: AssemblyTitle("Lan Ide Setup")]
+[assembly: AssemblyDescription("Bootstrap installer for Lan Ide")]
+[assembly: AssemblyCompany("Aliasgar Rangwala")]
+[assembly: AssemblyProduct("Lan Ide")]
+[assembly: AssemblyCopyright("Copyright © 2026 Aliasgar Rangwala")]
+[assembly: AssemblyTrademark("Lan Ide")]
+[assembly: AssemblyVersion("{{ASSEMBLY_VERSION}}")]
+[assembly: AssemblyFileVersion("{{ASSEMBLY_VERSION}}")]
+[assembly: AssemblyInformationalVersion("{{VERSION}}+{{RELEASE_REF}}")]
+
+namespace LanIdeInstaller
+{
+    internal static class Program
+    {
+        private const string InstallScriptBase64 = "{{INSTALL_SCRIPT_BASE64}}";
+        private const string ReleaseRef = "{{RELEASE_REF}}";
+        private const string RepoUrl = "https://github.com/rangwalaaliasgar55-bot/Lan-Ide.git";
+        internal static int ExitCode = 0;
+
+        [STAThread]
+        private static void Main(string[] args)
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            bool quiet = false;
+            foreach (string arg in args)
+            {
+                if (string.Equals(arg, "/quiet", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(arg, "/silent", StringComparison.OrdinalIgnoreCase))
+                {
+                    quiet = true;
+                }
+            }
+
+            if (!quiet)
+            {
+                DialogResult answer = MessageBox.Show(
+                    "Lan Ide Setup\n\n" +
+                    "Founder: Aliasgar Rangwala\n\n" +
+                    "This installer will set up Lan Ide on Windows using WSL2 Ubuntu, " +
+                    "clone the release build, install Python dependencies, and create a Desktop launcher.\n\n" +
+                    "It does not include third-party AI CLIs or API keys; users bring their own accounts.\n\n" +
+                    "Continue?",
+                    "Lan Ide Setup",
+                    MessageBoxButtons.OKCancel,
+                    MessageBoxIcon.Information);
+                if (answer != DialogResult.OK)
+                {
+                    ExitCode = 1602;
+                    Environment.ExitCode = ExitCode;
+                    return;
+                }
+            }
+
+            using (SetupForm form = new SetupForm())
+            {
+                form.Shown += delegate { ThreadPool.QueueUserWorkItem(delegate { RunInstall(form); }); };
+                Application.Run(form);
+            }
+            Environment.ExitCode = ExitCode;
+        }
+
+        private static void RunInstall(SetupForm form)
+        {
+            string logPath = "";
+            try
+            {
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                string appDir = Path.Combine(localAppData, "Lan Ide");
+                string setupDir = Path.Combine(appDir, "Setup");
+                Directory.CreateDirectory(setupDir);
+                logPath = Path.Combine(setupDir, "LanIdeSetup.log");
+                string scriptPath = Path.Combine(setupDir, "install.ps1");
+
+                string script = Encoding.UTF8.GetString(Convert.FromBase64String(InstallScriptBase64));
+                File.WriteAllText(scriptPath, script, new UTF8Encoding(false));
+
+                form.SetLogPath(logPath);
+                Append(form, logPath, "Lan Ide Setup");
+                Append(form, logPath, "Founder: Aliasgar Rangwala");
+                Append(form, logPath, "Repository: " + RepoUrl);
+                Append(form, logPath, "Release/ref: " + (ReleaseRef.Length == 0 ? "default branch" : ReleaseRef));
+                Append(form, logPath, "Log: " + logPath);
+                Append(form, logPath, "");
+
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = PowerShellPath();
+                psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File " + Quote(scriptPath);
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+
+                Process process = new Process();
+                process.StartInfo = psi;
+                process.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                {
+                    if (e.Data != null) Append(form, logPath, e.Data);
+                };
+                process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
+                {
+                    if (e.Data != null) Append(form, logPath, e.Data);
+                };
+
+                Append(form, logPath, "Starting PowerShell installer...");
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                process.WaitForExit();
+                ExitCode = process.ExitCode;
+
+                if (process.ExitCode == 0)
+                {
+                    Append(form, logPath, "");
+                    Append(form, logPath, "Success. Lan Ide is installed. Use LanIde.bat on your Desktop.");
+                    form.MarkDone(true, "Installed successfully. You can close this setup window.");
+                }
+                else
+                {
+                    Append(form, logPath, "");
+                    Append(form, logPath, "Installer exited with code " + process.ExitCode + ".");
+                    form.MarkDone(false, "Install failed. See the log above or " + logPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                ExitCode = 1;
+                try { Append(form, logPath, "ERROR: " + ex); } catch { }
+                form.MarkDone(false, "Install failed: " + ex.Message);
+            }
+        }
+
+        private static string PowerShellPath()
+        {
+            string systemRoot = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+            string p = Path.Combine(systemRoot, "System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+            return File.Exists(p) ? p : "powershell.exe";
+        }
+
+        private static string Quote(string value)
+        {
+            return "\"" + value.Replace("\"", "\\\"") + "\"";
+        }
+
+        private static void Append(SetupForm form, string logPath, string line)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(logPath))
+                {
+                    File.AppendAllText(logPath, line + Environment.NewLine, Encoding.UTF8);
+                }
+            }
+            catch { }
+            form.AppendLine(line);
+        }
+    }
+
+    internal sealed class SetupForm : Form
+    {
+        private readonly TextBox log;
+        private readonly Label status;
+        private readonly Button closeButton;
+        private string logPath = "";
+
+        internal SetupForm()
+        {
+            Text = "Lan Ide Setup";
+            Width = 760;
+            Height = 520;
+            StartPosition = FormStartPosition.CenterScreen;
+            MinimizeBox = true;
+            MaximizeBox = true;
+
+            status = new Label();
+            status.Text = "Installing Lan Ide...";
+            status.Dock = DockStyle.Top;
+            status.Height = 34;
+            status.Padding = new Padding(12, 10, 12, 0);
+
+            log = new TextBox();
+            log.Multiline = true;
+            log.ReadOnly = true;
+            log.ScrollBars = ScrollBars.Both;
+            log.WordWrap = false;
+            log.Dock = DockStyle.Fill;
+            log.Font = new System.Drawing.Font("Consolas", 9.0f);
+
+            Panel bottom = new Panel();
+            bottom.Dock = DockStyle.Bottom;
+            bottom.Height = 48;
+            bottom.Padding = new Padding(12, 8, 12, 8);
+
+            closeButton = new Button();
+            closeButton.Text = "Close";
+            closeButton.Enabled = false;
+            closeButton.Dock = DockStyle.Right;
+            closeButton.Width = 110;
+            closeButton.Click += delegate { Close(); };
+            bottom.Controls.Add(closeButton);
+
+            Controls.Add(log);
+            Controls.Add(bottom);
+            Controls.Add(status);
+
+            FormClosing += delegate(object sender, FormClosingEventArgs e)
+            {
+                if (!closeButton.Enabled)
+                {
+                    e.Cancel = true;
+                    MessageBox.Show("Lan Ide is still installing. Wait for the setup to finish.",
+                        "Lan Ide Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            };
+        }
+
+        internal void SetLogPath(string path)
+        {
+            logPath = path;
+        }
+
+        internal void AppendLine(string line)
+        {
+            if (IsDisposed) return;
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action<string>(AppendLine), line); } catch { }
+                return;
+            }
+            log.AppendText(line + Environment.NewLine);
+        }
+
+        internal void MarkDone(bool success, string message)
+        {
+            if (IsDisposed) return;
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action<bool, string>(MarkDone), success, message); } catch { }
+                return;
+            }
+            status.Text = message;
+            closeButton.Enabled = true;
+            if (!success)
+            {
+                MessageBox.Show(message + (logPath.Length > 0 ? "\n\nLog: " + logPath : ""),
+                    "Lan Ide Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            else
+            {
+                MessageBox.Show(message, "Lan Ide Setup", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+    }
+}
