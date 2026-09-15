@@ -1,5 +1,5 @@
 name: perm-test
-on: workflow_dispatch
+on: [push, workflow_dispatch]
 jobs:
   noop:
     runs-on: ubuntu-latest
