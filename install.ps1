@@ -14,7 +14,12 @@ $RepoRef = if ($env:LAN_IDE_REF) { $env:LAN_IDE_REF } else { '' }
 $RawInstall = 'https://raw.githubusercontent.com/rangwalaaliasgar55-bot/Lan-Ide/main/install.ps1'
 
 function ConvertTo-ShSingleQuote([string]$Value) {
-    return "'" + ($Value -replace "'", "'\"'\"'") + "'"
+    # A POSIX shell single quote is escaped by ending the quote, writing an
+    # escaped quote, and reopening it: '\'' . Backslash is not PowerShell's
+    # escape character, so keep this replacement in a double-quoted string.
+    if ($null -eq $Value) { return "''" }
+    $escaped = $Value.Replace("'", "'\''")
+    return "'$escaped'"
 }
 
 function Write-Step([string]$Message) {

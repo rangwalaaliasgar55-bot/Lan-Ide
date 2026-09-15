@@ -90,6 +90,18 @@ def test_install_ps1_existe():
     assert os.path.isfile(_PS1), 'install.ps1 en la raíz (irm …/main/install.ps1 | iex)'
 
 
+def test_install_ps1_cotiza_valores_para_bash_sin_sintaxis_de_otro_shell():
+    """The installer is parsed by PowerShell before it reaches WSL.
+
+    Keep the POSIX apostrophe escape as data inside a PowerShell string; a
+    backslash does not escape quotes in PowerShell and the old expression
+    therefore made the whole embedded script fail at parse time.
+    """
+    src = _leer(_PS1)
+    assert '$escaped = $Value.Replace("\'", "\'\\\'\'")' in src
+    assert '$Value -replace "\'", "\'\\"\'\\"\'"' not in src
+
+
 def test_install_ps1_instala_wsl_y_deja_acceso_en_el_escritorio():
     src = _leer(_PS1)
     assert 'wsl --install' in src or 'wsl.exe --install' in src

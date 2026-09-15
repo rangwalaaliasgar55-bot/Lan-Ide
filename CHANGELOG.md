@@ -3,6 +3,10 @@
 The update notice's news are **auto-detected from git** (new commits, grouped by area). This file
 is only a fallback for the case git goes away. Format: `## X.Y.Z` + bullets `- …`, newest first.
 
+## 1.7.4
+- Windows: fixed the setup bootstrapper's PowerShell quoting so the embedded installer parses and can pass repository values safely into WSL.
+- Release: setup builds are pinned to this release and published with a SHA256 checksum.
+
 ## 1.7.3
 - Brand: Lan Ide naming across app, docs, scripts, and install paths; founder listed as Aliasgar Rangwala.
 - Release: added a Windows `LanIdeSetup.exe` bootstrapper workflow with checksum assets for downloadable releases.
