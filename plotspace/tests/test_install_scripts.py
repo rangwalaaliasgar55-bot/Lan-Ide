@@ -121,7 +121,18 @@ def test_build_setup_valida_el_script_que_embebe():
     assert '$parseErrors.Count' in build
 
 
+def test_setup_escribe_utf8_detectable_por_windows_powershell():
+    template = _leer(os.path.join(_RAIZ, 'packaging', 'windows', 'LanIdeSetup.cs.in'))
+    assert 'new UTF8Encoding(true)' in template
+
+
+def test_install_ps1_es_ascii_para_evitar_fallos_de_codificacion():
+    raw = open(_PS1, 'rb').read()
+    assert all(byte < 128 for byte in raw)
+
+
 def test_install_ps1_no_promete_motor_nativo_windows():
+
     src = _leer(_PS1).lower()
     assert 'conpty' not in src
     assert 'msi' not in src

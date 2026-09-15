@@ -6,7 +6,7 @@ on:
       tag:
         description: Release tag to create/update
         required: true
-        default: v1.7.6
+        default: v1.7.7
       prerelease:
         description: Mark as prerelease
         type: boolean
@@ -31,13 +31,27 @@ jobs:
         run: |
           $tag = '${{ github.event.inputs.tag }}'
           if (-not $tag) { $tag = $env:GITHUB_REF_NAME }
-          if (-not $tag) { $tag = 'v1.7.6' }
+          if (-not $tag) { $tag = 'v1.7.7' }
           $pre = '${{ github.event.inputs.prerelease }}'
           if (-not $pre) { $pre = 'false' }
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
           "PRERELEASE=$pre" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Release tag: $tag"
           Write-Host "Prerelease: $pre"
+
+      - name: Validate install.ps1 with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $path = Join-Path $env:GITHUB_WORKSPACE 'install.ps1'
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error ("line {0}, column {1}: {2}" -f $_.Extent.StartLineNumber, $_.Extent.StartColumnNumber, $_.Message) }
+            exit 1
+          }
+          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $path -dry-run
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build LanIdeSetup.exe
         shell: pwsh

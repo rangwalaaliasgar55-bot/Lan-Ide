@@ -1,4 +1,4 @@
-# Lan Ide — one-command install for Windows.
+# Lan Ide - one-command install for Windows.
 #
 #   irm https://raw.githubusercontent.com/rangwalaaliasgar55-bot/Lan-Ide/main/install.ps1 | iex
 #
@@ -6,7 +6,7 @@
 # This script: installs WSL if needed (one reboot), runs install.sh inside
 # Linux, and drops LanIde.bat on your Desktop. Double-click that next time.
 #
-# Full app — same as Linux. You bring your own agent CLIs (Claude, Codex, …).
+# Full app - same as Linux. You bring your own agent CLIs (Claude, Codex, ...).
 
 $ErrorActionPreference = 'Stop'
 $RepoUrl = if ($env:LAN_IDE_REPO_URL) { $env:LAN_IDE_REPO_URL } else { 'https://github.com/rangwalaaliasgar55-bot/Lan-Ide.git' }
@@ -62,13 +62,13 @@ function Install-WslThenExit {
 }
 
 function Invoke-LinuxInstall {
-    Write-Step 'Warming up WSL…'
+    Write-Step 'Warming up WSL...'
     & wsl.exe -- true
     if ($LASTEXITCODE -ne 0) {
         throw 'WSL did not start. Open Ubuntu from the Start menu once, then re-run this installer.'
     }
 
-    Write-Step 'Installing Lan Ide inside WSL (~/lan-ide, full Python deps)…'
+    Write-Step 'Installing Lan Ide inside WSL (~/lan-ide, full Python deps)...'
     $repoUrlSh = ConvertTo-ShSingleQuote $RepoUrl
     $repoRefSh = ConvertTo-ShSingleQuote $RepoRef
     # Build the Linux script as an array instead of a here-string. This keeps
@@ -98,7 +98,13 @@ function Invoke-LinuxInstall {
     ) -join "`n"
     $inner = $inner.Replace('__REPO_URL__', $repoUrlSh).Replace('__REPO_REF__', $repoRefSh)
     $inner = $inner -replace "`r`n", "`n"
-    & wsl.exe -- bash -lc $inner
+
+    # Pass one short, quote-free argument to wsl.exe. Sending the multiline
+    # script directly relies on Windows PowerShell's native argument quoting,
+    # which can rewrite embedded quotes before bash receives them.
+    $innerBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($inner))
+    $wslCommand = "echo $innerBase64 | base64 -d | bash"
+    & wsl.exe -- bash -lc $wslCommand
     if ($LASTEXITCODE -ne 0) {
         throw 'install.sh inside WSL failed. Open Ubuntu and look at the output above.'
     }
@@ -108,7 +114,7 @@ function Install-DesktopLauncher {
     $desktop = [Environment]::GetFolderPath('Desktop')
     if (-not $desktop) { $desktop = Join-Path $env:USERPROFILE 'Desktop' }
     $dest = Join-Path $desktop 'LanIde.bat'
-    Write-Step "Desktop shortcut → $dest"
+    Write-Step "Desktop shortcut -> $dest"
     $bat = & wsl.exe -- bash -lc 'cat "$HOME/lan-ide/scripts/abrir-lanide-app.bat"'
     if ($LASTEXITCODE -ne 0 -or -not $bat) {
         throw 'Could not read scripts/abrir-lanide-app.bat from WSL.'
@@ -134,7 +140,7 @@ Write-Step 'Lan Ide for Windows (engine in WSL2).'
 if ($dry) {
     Write-Step '[dry-run] wsl --install  (if WSL is missing)'
     Write-Step '[dry-run] wsl -- bash install.sh --no-start'
-    Write-Step '[dry-run] copy abrir-lanide-app.bat → Desktop\LanIde.bat'
+    Write-Step '[dry-run] copy abrir-lanide-app.bat -> Desktop\LanIde.bat'
     Write-Step '[dry-run] start LanIde.bat'
     exit 0
 }
@@ -143,7 +149,7 @@ if (-not (Test-WslDistro)) {
     if (-not (Test-WslEngine)) {
         Install-WslThenExit
     }
-    Write-Step 'WSL is installed but no distro answered. Installing Ubuntu…'
+    Write-Step 'WSL is installed but no distro answered. Installing Ubuntu...'
     if (-not (Test-IsAdmin)) {
         Write-Host "Open PowerShell as Administrator and run:  wsl --install -d Ubuntu"
         Write-Host "Then reboot, open Ubuntu once, and re-run:"
@@ -161,10 +167,10 @@ $launcher = Install-DesktopLauncher
 Write-Host ''
 Write-Host "Installed. Shortcut: $launcher"
 Write-Host 'Next time: double-click LanIde.bat on the Desktop.'
-Write-Host 'Then ⚙ → Accounts to link Claude / Codex / Grok / … (you bring those CLIs).'
+Write-Host 'Then Settings -> Accounts to link Claude / Codex / Grok / ... (you bring those CLIs).'
 
 if (-not $noStart) {
-    Write-Step 'Starting Lan Ide…'
+    Write-Step 'Starting Lan Ide...'
     Start-Process -FilePath $launcher
 }
 

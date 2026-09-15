@@ -82,7 +82,9 @@ namespace LanIdeInstaller
                 string scriptPath = Path.Combine(setupDir, "install.ps1");
 
                 string script = Encoding.UTF8.GetString(Convert.FromBase64String(InstallScriptBase64));
-                File.WriteAllText(scriptPath, script, new UTF8Encoding(false));
+                // Windows PowerShell 5.1 reliably detects UTF-8 scripts with a BOM.
+                // Keep the extracted installer ASCII-only as an additional guard.
+                File.WriteAllText(scriptPath, script, new UTF8Encoding(true));
 
                 form.SetLogPath(logPath);
                 Append(form, logPath, "Lan Ide Setup");
