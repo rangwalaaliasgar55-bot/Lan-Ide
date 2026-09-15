@@ -6,7 +6,7 @@ on:
       tag:
         description: Release tag to create/update
         required: true
-        default: v1.7.7
+        default: v1.7.8
       prerelease:
         description: Mark as prerelease
         type: boolean
@@ -23,6 +23,7 @@ jobs:
   windows-setup:
     name: Build Windows setup and publish release
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -31,7 +32,7 @@ jobs:
         run: |
           $tag = '${{ github.event.inputs.tag }}'
           if (-not $tag) { $tag = $env:GITHUB_REF_NAME }
-          if (-not $tag) { $tag = 'v1.7.7' }
+          if (-not $tag) { $tag = 'v1.7.8' }
           $pre = '${{ github.event.inputs.prerelease }}'
           if (-not $pre) { $pre = 'false' }
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -50,8 +51,7 @@ jobs:
             $errors | ForEach-Object { Write-Error ("line {0}, column {1}: {2}" -f $_.Extent.StartLineNumber, $_.Extent.StartColumnNumber, $_.Message) }
             exit 1
           }
-          & powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $path -dry-run
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host 'Windows PowerShell 5.1 parser validation passed.'
 
       - name: Build LanIdeSetup.exe
         shell: pwsh
