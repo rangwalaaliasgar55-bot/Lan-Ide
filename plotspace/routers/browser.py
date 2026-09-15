@@ -1,0 +1,78 @@
+"""LAN_IDE — Browser server-side: WebSocket `/ws/browser/{sid}`.
+
+Puente entre el panel del Browser (frontend) y una `Sesion` de Chromium
+(`core/remote_browser.py`). El cliente manda acciones (navegar, mouse, teclado,
+resize) y recibe por el mismo socket los frames del screencast y los cambios de
+URL/título. Ver el módulo del motor para el POR QUÉ y las reglas de seguridad.
+"""
+import asyncio
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
+from plotspace.core import auth as lanide_auth
+from plotspace.core import remote_browser as rb
+
+router = APIRouter(tags=['browser'])
+
+
+@router.websocket('/ws/browser/{sid}')
+async def ws_browser(websocket: WebSocket, sid: str):
+    # El middleware http NO corre para websockets: Origin anti CSWSH.
+    if not lanide_auth.origen_permitido(websocket.headers.get('origin'),
+                                        lanide_auth.hosts_extra()):
+        await websocket.close(code=4403)
+        return
+    await websocket.accept()
+
+    ancho = websocket.query_params.get('w')
+    alto = websocket.query_params.get('h')
+    try:
+        ses = await rb.Sesion.crear(
+            int(ancho) if ancho and ancho.isdigit() else 1280,
+            int(alto) if alto and alto.isdigit() else 800)
+    except Exception as e:
+        await websocket.send_json({'t': 'err', 'msg': f'no se pudo abrir el browser: {e}'})
+        await websocket.close()
+        return
+
+    try:
+        await ses.iniciar_screencast()
+    except Exception as e:
+        await websocket.send_json({'t': 'err', 'msg': f'screencast: {e}'})
+
+    fin = asyncio.Event()
+
+    async def leer_cliente():
+        try:
+            async for msg in websocket.iter_json():
+                await ses.input(msg)
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        except Exception:
+            pass
+        finally:
+            # Marca la desconexión aunque el cliente sólo reciba (nosotros no
+            # mandamos nada): sin esto, con una página quieta el loop se queda
+            # bloqueado en `cola.get()` y la sesión queda viva para siempre.
+            fin.set()
+
+    tarea = asyncio.create_task(leer_cliente())
+    try:
+        while not fin.is_set():
+            try:
+                item = await asyncio.wait_for(ses.cola.get(), timeout=0.25)
+            except asyncio.TimeoutError:
+                continue
+            if fin.is_set():
+                break
+            await websocket.send_json(item)
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    except Exception:
+        pass
+    finally:
+        tarea.cancel()
+        try:
+            await asyncio.wait_for(ses.cerrar(), timeout=10)
+        except Exception:
+            pass
