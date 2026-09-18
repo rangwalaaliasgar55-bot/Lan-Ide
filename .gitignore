@@ -78,3 +78,7 @@ server.pid
 .lan-ide/mailbox-pendientes.json
 .lan-ide/jv
 desktop/engine/target/
+
+# Shell de escritorio (Electron): deps y binarios de build
+desktop/node_modules/
+desktop/dist/

@@ -5,34 +5,129 @@ on:
   push:
     branches: [main]
 
+# Un push nuevo sobre la misma rama cancela la corrida anterior: no tiene
+# sentido pagar CI por un commit que ya quedó viejo.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  backend:
+    name: Backend (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 es el piso declarado en pyproject (requires-python). Se prueba el
+        # piso Y el techo: casi todos los bugs de compatibilidad aparecen en uno
+        # de los dos extremos, no en el medio.
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: System deps
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq tmux
+      - name: Install Python deps
+        # requirements-base y NO requirements.txt: los extras pesados
+        # (onnx-asr, faster-whisper, playwright, torch) suman ~1.3 GB y minutos
+        # de CI, y la suite no los necesita — los tests que los tocarían ya se
+        # saltean solos. Es lo mismo que viaja en el instalador.
+        run: pip install -r packaging/requirements-base.txt pytest
+      - name: Import smoke
+        # El canary del updater hace exactamente esto antes de re-ejecutar: si
+        # el import falla, el server no vuelve tras un "Actualizar ahora".
+        run: python -c "import plotspace.main"
+      - name: Backend tests
+        run: python -m pytest plotspace/tests/ -q
+
+  sin-tmux:
+    name: Degradación sin tmux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+      - name: Install Python deps
+        run: pip install -r packaging/requirements-base.txt pytest
+      # SIN instalar tmux, a propósito. tmux es el motor de terminales y su
+      # ausencia provocaba 500s opacos, terminales fantasma en la DB y un
+      # traceback por segundo en los pollers. Este job es el que impide que esa
+      # regresión vuelva: en el runner de arriba tmux SIEMPRE está, así que el
+      # camino degradado no se ejercitaba nunca.
+      - name: No debe haber tmux en este job
+        run: '! command -v tmux'
+      - name: Suite completa sin motor
+        run: python -m pytest plotspace/tests/ -q
+
+  frontend:
+    name: Frontend + desktop
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-      - name: System deps
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq tmux
-      - name: Install Python deps
-        run: pip install pytest -r plotspace/requirements.txt
-      - name: Backend tests
-        run: python -m pytest plotspace/tests/ -q
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
       - name: Frontend tests
         run: |
           set -e
+          fallos=0
           for t in $(find frontend -path '*__tests__*' -name '*.test.js' | sort); do
-            node "$t"
+            node "$t" || { echo "::error file=$t::suite en rojo"; fallos=1; }
+          done
+          exit $fallos
+      - name: Desktop — deps del motor
+        # El shell de escritorio levanta el motor DE VERDAD en sus tests
+        # (arranca, /api/health, mata, verifica que el puerto quedó libre).
+        run: |
+          python -m venv venv
+          ./venv/bin/pip install -q -r packaging/requirements-base.txt
+      - name: Desktop tests
+        working-directory: desktop
+        # Sin `npm install`: las suites son node:test puro y no tocan Electron
+        # (por eso el ciclo de vida vive fuera de main.js). Descargar el binario
+        # de Electron acá serían ~100 MB para nada.
+        run: node --test test/*.test.js
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - name: Ruff (errores reales)
+        # El set está acotado a propósito a lo que ES un bug: nombres
+        # indefinidos, imports muertos, redefiniciones, except sin sentido.
+        # El estilo NO se enforcea — este repo tiene convención propia y un
+        # linter opinado lo único que haría es ruido en cada PR.
+        run: ruff check plotspace backend scripts packaging --output-format=github
+      - name: Sintaxis JS
+        run: |
+          set -e
+          for f in $(find frontend desktop -name '*.js' \
+                     -not -path '*/vendor/*' -not -path '*/node_modules/*'); do
+            node --check "$f"
           done
       - name: Brand leak grep
         run: |
           if grep -RInE 'Complot|PlotSpace|BridgeMind' \
             --exclude-dir=vendor --exclude-dir=__pycache__ --exclude-dir=.github \
+            --exclude-dir=node_modules \
             --exclude='*.png' --exclude='*.ico' .; then
             echo "brand leak found" >&2
             exit 1

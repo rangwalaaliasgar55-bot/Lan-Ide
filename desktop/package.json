@@ -1,0 +1,72 @@
+{
+  "name": "lan-ide-desktop",
+  "productName": "Lan Ide",
+  "version": "1.7.3",
+  "description": "Lan Ide — your fleet of coding agents, as a desktop app.",
+  "author": "Aliasgar Rangwala",
+  "license": "MIT",
+  "private": true,
+  "main": "src/main.js",
+  "homepage": "https://github.com/rangwalaaliasgar55-bot/Lan-Ide",
+  "scripts": {
+    "start": "electron .",
+    "dev": "LAN_IDE_DESKTOP_DEV=1 electron .",
+    "test": "node --test test/*.test.js",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:linux": "electron-builder --linux",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "ai.lanide.desktop",
+    "productName": "Lan Ide",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "!**/__tests__/**",
+      "!test/**"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "engine",
+        "filter": [
+          "plotspace/**/*",
+          "frontend/**/*",
+          "VERSION",
+          "pyproject.toml",
+          "README.md",
+          "LICENSE",
+          "!plotspace/tests/**",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!frontend/**/__tests__/**"
+        ]
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Development",
+      "maintainer": "Aliasgar Rangwala"
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
