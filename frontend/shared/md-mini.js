@@ -14,8 +14,11 @@
   var SENT = String.fromCharCode(0xE000);
 
   function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    // La comilla simple también: un atributo delimitado con '…' (los hay en
+    // el HTML generado y en el que pega un agente) se cierra con ' igual que
+    // uno con "…" se cierra con ".
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
 

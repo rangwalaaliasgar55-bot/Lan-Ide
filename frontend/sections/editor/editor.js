@@ -163,9 +163,12 @@
 
   // esc() vive en workspace.js como global; lo reusamos para no duplicar.
   const esc = (s) => window.esc(s);
-  // esc() escapa <>& pero NO comillas; para interpolar en atributos="..." hace
-  // falta escapar también " (y ') para evitar romper el atributo (XSS).
-  const escAttr = (s) => esc(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  // escAttr existía porque el esc() viejo NO escapaba comillas y rompía los
+  // atributos. Ahora esc() ya las escapa, así que volver a pasar el reemplazo
+  // acá convertiría `&quot;` en `&amp;quot;` y el atributo mostraría la
+  // entidad cruda. Se mantiene el nombre: lo usan muchos call sites y deja
+  // explícito en el código dónde el valor va adentro de un atributo.
+  const escAttr = esc;
 
   const _t = (s) => (window.LanIdeI18n && window.LanIdeI18n.t) ? window.LanIdeI18n.t(s) : s;
   // Bilingüe para strings COMPUESTAS (números/valores adentro): las estáticas
