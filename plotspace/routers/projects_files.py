@@ -340,9 +340,45 @@ def _git_status_map(base: str) -> dict:
 # pueden BORRAR desde el editor dentro del árbol protegido de LanIde — los archivos
 # reales de LanIde no. En memoria (se pierde al reiniciar). project_id → set(rel).
 _CREADOS_UI: dict = {}
-def _marcar_creado(pid, rel):    _CREADOS_UI.setdefault(int(pid), set()).add(rel)
-def _fue_creado_ui(pid, rel):    return rel in _CREADOS_UI.get(int(pid), set())
-def _olvidar_creado(pid, rel):   _CREADOS_UI.get(int(pid), set()).discard(rel)
+
+
+def _clave_creado(rel: str) -> str:
+    """Normaliza el path relativo para usarlo como CLAVE del registro.
+    Devuelve '' para lo que no puede ser una clave válida.
+
+    Sin esto, la clave era el string crudo del request y `/nota.txt`,
+    `nota.txt` y `./nota.txt` eran tres entradas distintas — aunque
+    `_safe_join` las resuelve todas al MISMO archivo. Efecto real: creabas un
+    archivo desde el editor con una forma y al borrarlo con otra te comías un
+    403 "solo se pueden borrar archivos creados desde el editor", sobre un
+    archivo que acababas de crear ahí mismo y sin forma de sacarlo desde la UI.
+
+    Un path que se escapa del proyecto (`../`) devuelve '' y NUNCA otorga
+    permiso. Hoy `_safe_join` ya lo frena con un 400 antes de llegar acá, pero
+    el registro es lo que autoriza a borrar dentro del árbol protegido: no
+    puede ser la capa que confíe en que otro validó primero.
+    """
+    limpio = os.path.normpath((rel or '').lstrip('/').replace('\\', '/')).strip('/')
+    if not limpio or limpio == '.' or limpio == '..' or limpio.startswith('../'):
+        return ''
+    return limpio
+
+
+def _marcar_creado(pid, rel):
+    clave = _clave_creado(rel)
+    if clave:
+        _CREADOS_UI.setdefault(int(pid), set()).add(clave)
+
+
+def _fue_creado_ui(pid, rel):
+    clave = _clave_creado(rel)
+    return bool(clave) and clave in _CREADOS_UI.get(int(pid), set())
+
+
+def _olvidar_creado(pid, rel):
+    clave = _clave_creado(rel)
+    if clave:
+        _CREADOS_UI.get(int(pid), set()).discard(clave)
 
 
 @router.get("/{project_id}/files/tree")
