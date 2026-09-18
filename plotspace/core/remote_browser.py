@@ -26,7 +26,6 @@ puro: el repo no usa uvloop). Un Chromium se comparte entre sesiones; cada WS
 abre un contexto aislado (cookies/storage propios).
 """
 import asyncio
-import base64
 from typing import Optional
 
 from plotspace.core import ssrf

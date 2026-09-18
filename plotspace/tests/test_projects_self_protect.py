@@ -11,7 +11,6 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from plotspace.routers import projects
 from plotspace.routers.projects import _es_ruta_protegida, _REPO_ROOT, RUTAS_PROHIBIDAS
 
 

@@ -30,6 +30,7 @@ event loop es sacarlo a un thread (`asyncio.to_thread`), NUNCA cambiar de API.
 Ver CLAUDE.md § "subprocess.run vs asyncio para tmux/git".
 """
 import asyncio
+import shutil
 import subprocess
 import threading
 from abc import ABC, abstractmethod
@@ -40,6 +41,51 @@ from typing import Dict, Optional, Set
 # colgado tras un crash) sin esto congela al handler que lo llama; con esto se
 # degrada a "no existe" / "no pude", que siempre es la respuesta segura.
 TIMEOUT_CONTROL = 5
+
+
+class MotorNoDisponible(RuntimeError):
+    """El binario del motor de terminales (tmux) no está instalado.
+
+    Existe para que la capa de arriba pueda distinguir "el comando falló" de
+    "no hay motor en esta máquina" y contestar 503 con un mensaje accionable,
+    en vez del 500 opaco que salía cuando el FileNotFoundError del
+    `subprocess.run` se escapaba hasta el handler.
+    """
+
+
+def tmux_disponible() -> bool:
+    """¿Hay un binario `tmux` en el PATH?
+
+    Se consulta en el arranque y al crear una terminal, NO en el camino
+    caliente: los comandos de control ya se protegen solos en `_correr_tmux`
+    (ejecutan y atajan el FileNotFoundError), que es más barato y más honesto
+    que un `which` cacheado por tick.
+    """
+    return shutil.which('tmux') is not None
+
+
+def _correr_tmux(argv, **kw):
+    """`subprocess.run` para tmux que NUNCA propaga FileNotFoundError.
+
+    POR QUÉ: cada `subprocess.run(['tmux', ...])` suelto revienta con
+    FileNotFoundError en una máquina sin tmux (Docker mínimo, macOS sin brew,
+    primer arranque antes del install). Ese error viajaba crudo hasta FastAPI
+    → 500 "Internal Server Error" sin una sola pista de qué falta, y en los
+    pollers de background aparecía como un traceback por segundo.
+
+    Ejecuta SIEMPRE (nada de un `which` previo: es un syscall extra por tick y
+    además le mentiría a los tests que inyectan un doble de `subprocess.run`)
+    y traduce el fallo a None. Devuelve None cuando no hay binario o el
+    comando se pasó del timeout; los llamadores ya tratan "no pude" como
+    degradación segura.
+    """
+    kw.setdefault('capture_output', True)
+    try:
+        return subprocess.run(argv, **kw)      # noqa: S603  (argv fijo, sin shell)
+    except (FileNotFoundError, NotADirectoryError, PermissionError):
+        return None
+    except subprocess.TimeoutExpired:
+        return None
 
 
 @dataclass
@@ -209,13 +255,12 @@ class TmuxBackend(TerminalBackend):
 
     # ── ciclo de vida ────────────────────────────────────────────────────
     def existe(self, terminal_id: int) -> bool:
-        try:
-            r = subprocess.run(
-                ['tmux', 'has-session', '-t', self.nombre_sesion(terminal_id)],
-                capture_output=True, timeout=TIMEOUT_CONTROL,
-            )
-        except subprocess.TimeoutExpired:
-            return False       # tmux colgado = degradación segura
+        r = _correr_tmux(
+            ['tmux', 'has-session', '-t', self.nombre_sesion(terminal_id)],
+            timeout=TIMEOUT_CONTROL,
+        )
+        if r is None:
+            return False       # sin tmux / tmux colgado = degradación segura
         return r.returncode == 0
 
     def crear(self, espec: EspecSesion) -> bool:
@@ -230,10 +275,23 @@ class TmuxBackend(TerminalBackend):
         if espec.comando:
             argv.append(espec.comando)
 
-        r = subprocess.run(
-            argv, capture_output=True, text=True,
-            cwd=espec.cwd, env=espec.entorno_proceso,
+        r = _correr_tmux(
+            argv, text=True, cwd=espec.cwd, env=espec.entorno_proceso,
         )
+        if r is None:
+            # No se pudo ejecutar. Distinguir "falta el binario" de "tmux no
+            # respondió" recién ACÁ (en el camino de error, no en el caliente):
+            # el llamador necesita SABER que no hay motor — devolver False a
+            # secas dejaba una fila en la DB y una card en la UI apuntando a
+            # una sesión inexistente (la "terminal fantasma").
+            if not tmux_disponible():
+                raise MotorNoDisponible(
+                    'tmux no está instalado — es el motor de terminales de Lan Ide. '
+                    'Instalalo con: apt install tmux (Debian/Ubuntu) · '
+                    'brew install tmux (macOS).'
+                )
+            print(f'[tmux] Error creando sesión {nombre}: tmux no respondió')
+            return False
         if r.returncode != 0:
             print(f'[tmux] Error creando sesión {nombre}: {(r.stderr or "").strip()}')
             return False
@@ -270,15 +328,15 @@ class TmuxBackend(TerminalBackend):
     def enviar_texto(self, terminal_id: int, texto: str) -> None:
         # `-l --` literal: el texto NUNCA se interpreta como nombre de tecla ni
         # como flag. Mismo patrón anti-inyección que el batch y send_to_agent.
-        subprocess.run(
+        _correr_tmux(
             ['tmux', 'send-keys', '-t', self.nombre_sesion(terminal_id), '-l', '--', texto],
-            capture_output=True,
+            timeout=TIMEOUT_CONTROL,
         )
 
     def enviar_tecla(self, terminal_id: int, tecla: str) -> None:
-        subprocess.run(
+        _correr_tmux(
             ['tmux', 'send-keys', '-t', self.nombre_sesion(terminal_id), tecla],
-            capture_output=True,
+            timeout=TIMEOUT_CONTROL,
         )
 
     # ── lectura ──────────────────────────────────────────────────────────
@@ -291,10 +349,8 @@ class TmuxBackend(TerminalBackend):
             argv += ['-S', '-']        # el buffer entero
         elif lineas:
             argv += ['-S', f'-{lineas}']
-        try:
-            r = subprocess.run(argv, capture_output=True, text=True,
-                               timeout=TIMEOUT_CONTROL)
-        except Exception:
+        r = _correr_tmux(argv, text=True, timeout=TIMEOUT_CONTROL)
+        if r is None:
             return None
         return r.stdout if r.returncode == 0 else None
 
@@ -310,11 +366,17 @@ class TmuxBackend(TerminalBackend):
             argv += ['-S', '-']
         elif lineas:
             argv += ['-S', f'-{lineas}']
-        proc = await asyncio.create_subprocess_exec(
-            *argv,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
+        # Sin tmux, create_subprocess_exec levanta FileNotFoundError DENTRO del
+        # poller: un traceback por segundo por terminal, y el ciclo que lo
+        # llama se muere. '' = "no pude leer", que es lo que ya manejan.
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except OSError:
+            return ''
         try:
             out, _ = await asyncio.wait_for(proc.communicate(), timeout=3.0)
         except asyncio.TimeoutError:
@@ -327,24 +389,20 @@ class TmuxBackend(TerminalBackend):
         return out.decode(errors='replace') if proc.returncode == 0 else ''
 
     def listar_sesiones(self) -> Set[str]:
-        try:
-            r = subprocess.run(
-                ['tmux', 'list-sessions', '-F', '#{session_name}'],
-                capture_output=True, text=True, timeout=TIMEOUT_CONTROL,
-            )
-        except Exception:
+        r = _correr_tmux(
+            ['tmux', 'list-sessions', '-F', '#{session_name}'],
+            text=True, timeout=TIMEOUT_CONTROL,
+        )
+        if r is None:
             return set()
         return set(r.stdout.splitlines()) if r.returncode == 0 else set()
 
     def comandos_vivos(self) -> Optional[Dict[str, str]]:
-        try:
-            r = subprocess.run(
-                ['tmux', 'list-panes', '-a', '-F',
-                 '#{session_name}\t#{pane_current_command}'],
-                capture_output=True, text=True, timeout=TIMEOUT_CONTROL)
-        except Exception:
-            return None
-        if r.returncode != 0:
+        r = _correr_tmux(
+            ['tmux', 'list-panes', '-a', '-F',
+             '#{session_name}\t#{pane_current_command}'],
+            text=True, timeout=TIMEOUT_CONTROL)
+        if r is None or r.returncode != 0:
             return None
         salida = {}
         for linea in r.stdout.splitlines():
@@ -354,14 +412,11 @@ class TmuxBackend(TerminalBackend):
         return salida
 
     def titulos_vivos(self) -> Dict[str, str]:
-        try:
-            r = subprocess.run(
-                ['tmux', 'list-panes', '-a', '-F', '#{session_name}\t#{pane_title}'],
-                capture_output=True, text=True, timeout=TIMEOUT_CONTROL,
-            )
-        except Exception:
-            return {}
-        if r.returncode != 0:
+        r = _correr_tmux(
+            ['tmux', 'list-panes', '-a', '-F', '#{session_name}\t#{pane_title}'],
+            text=True, timeout=TIMEOUT_CONTROL,
+        )
+        if r is None or r.returncode != 0:
             return {}
         titulos = {}
         for linea in r.stdout.splitlines():
@@ -372,13 +427,12 @@ class TmuxBackend(TerminalBackend):
         return titulos
 
     def estado_pane(self, terminal_id: int, formato: str) -> Optional[str]:
-        try:
-            r = subprocess.run(
-                ['tmux', 'display-message', '-p', '-t',
-                 self.nombre_sesion(terminal_id), formato],
-                capture_output=True, text=True, timeout=TIMEOUT_CONTROL,
-            )
-        except Exception:
+        r = _correr_tmux(
+            ['tmux', 'display-message', '-p', '-t',
+             self.nombre_sesion(terminal_id), formato],
+            text=True, timeout=TIMEOUT_CONTROL,
+        )
+        if r is None:
             return None
         return r.stdout.strip() if r.returncode == 0 else None
 
@@ -404,13 +458,12 @@ class TmuxBackend(TerminalBackend):
         client' y se tragaba en silencio por capture_output → el auto-sanado
         del garble nunca repintaba y había que apretar F5. Acá se enumeran los
         clientes reales y se refresca cada uno."""
-        try:
-            r = await asyncio.to_thread(
-                subprocess.run,
-                ['tmux', 'list-clients', '-t', session, '-F', '#{client_tty}'],
-                capture_output=True, text=True, timeout=TIMEOUT_CONTROL,
-            )
-        except Exception:
+        r = await asyncio.to_thread(
+            _correr_tmux,
+            ['tmux', 'list-clients', '-t', session, '-F', '#{client_tty}'],
+            text=True, timeout=TIMEOUT_CONTROL,
+        )
+        if r is None:
             return
         for tty in [t.strip() for t in (r.stdout or '').splitlines() if t.strip()]:
             await self._async('tmux', 'refresh-client', '-t', tty)
@@ -433,9 +486,9 @@ class TmuxBackend(TerminalBackend):
             ('status', 'off'),
         ]
         for opcion, valor in opciones:
-            subprocess.run(
+            _correr_tmux(
                 ['tmux', 'set-option', '-t', nombre, opcion, valor],
-                capture_output=True, timeout=TIMEOUT_CONTROL,
+                timeout=TIMEOUT_CONTROL,
             )
 
     def preparar_servidor(self) -> None:
@@ -459,7 +512,8 @@ class TmuxBackend(TerminalBackend):
             ('clock-mode-colour',           '#a78bfa'),
         ]
         for opcion, valor in estilos:
-            subprocess.run(['tmux', 'set', '-g', opcion, valor], capture_output=True)
+            _correr_tmux(['tmux', 'set', '-g', opcion, valor],
+                         timeout=TIMEOUT_CONTROL)
 
     def instalar_bindings_copy_mode(self) -> None:
         """Toda tecla imprimible en copy-mode cancela el modo y pasa al shell,
@@ -479,16 +533,16 @@ class TmuxBackend(TerminalBackend):
                 # La acción entera va como UN string: si ';' viaja como argv
                 # aparte, tmux lo toma como separador de su propio comando y
                 # ejecuta el send-keys sobre la pane activa.
-                subprocess.run(
+                _correr_tmux(
                     ['tmux', 'bind-key', '-T', tabla, k,
                      f'send-keys -X cancel ; send-keys {k!r}'],
-                    capture_output=True,
+                    timeout=TIMEOUT_CONTROL,
                 )
             for tecla, envio in especiales:
-                subprocess.run(
+                _correr_tmux(
                     ['tmux', 'bind-key', '-T', tabla, tecla,
                      f'send-keys -X cancel ; send-keys {envio}'],
-                    capture_output=True,
+                    timeout=TIMEOUT_CONTROL,
                 )
         _COPY_MODE_BINDINGS_INSTALADOS = True
         print('[tmux] Bindings copy-mode → passthrough instaladas')
@@ -496,8 +550,8 @@ class TmuxBackend(TerminalBackend):
     def matar_sesion_por_nombre(self, nombre: str) -> None:
         """Kill de una sesión que no cuelga de un terminal_id (zombis del
         reconcile). Target exacto, mismo motivo que `_target_exacto`."""
-        subprocess.run(['tmux', 'kill-session', '-t', f'={nombre}'],
-                       capture_output=True, timeout=TIMEOUT_CONTROL)
+        _correr_tmux(['tmux', 'kill-session', '-t', f'={nombre}'],
+                     timeout=TIMEOUT_CONTROL)
 
     # ── plomería ─────────────────────────────────────────────────────────
     @staticmethod
@@ -506,8 +560,7 @@ class TmuxBackend(TerminalBackend):
         siendo obligatorio (create_subprocess_exec cuelga); `to_thread` solo
         lo saca del loop para que no trabe el eco de las otras terminales.
         Es el blindaje contra el "freeze por mil cortes"."""
-        kw.setdefault('capture_output', True)
-        return await asyncio.to_thread(subprocess.run, list(args), **kw)
+        return await asyncio.to_thread(_correr_tmux, list(args), **kw)
 
 
 # ══════════════════════════════════════════════════════════════════════════

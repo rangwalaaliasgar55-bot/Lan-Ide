@@ -28,8 +28,8 @@ import sys
 import threading
 import time
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from plotspace.core import agent_watch
 from plotspace.core.database import get_db
@@ -874,6 +874,25 @@ def ready():
     Abierto (RUTAS_ABIERTAS, como /health): el waiter tiene que andar durante el
     reinicio, aunque la cookie no esté fresca. Sin secreto: solo un booleano."""
     return {'ready': _server_listo()}
+
+
+@router.get("/preflight")
+def preflight():
+    """Dependencias EXTERNAS del motor y cuáles faltan.
+
+    Es el mismo chequeo que se imprime en el arranque, expuesto para que la UI
+    pueda decir "falta tmux, instalalo así" en vez de dejar al usuario con un
+    error opaco cuando abre una terminal. Solo lectura: no instala nada.
+    """
+    from plotspace.core import preflight as _pf
+    binarios = _pf.estado_binarios()
+    faltan_criticos = [b['nombre'] for b in binarios
+                       if b['critico'] and not b['presente']]
+    return {
+        'ok':              not faltan_criticos,
+        'binarios':        binarios,
+        'faltan_criticos': faltan_criticos,
+    }
 
 
 @router.post("/presence/state")

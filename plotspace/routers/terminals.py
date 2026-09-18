@@ -16,7 +16,11 @@ from fastapi.websockets import WebSocketState
 from pydantic import BaseModel
 
 from plotspace.core.database import get_db
-from plotspace.core.terminal_backend import EspecSesion, backend as motor_terminales
+from plotspace.core.terminal_backend import (
+    EspecSesion,
+    MotorNoDisponible,
+    backend as motor_terminales,
+)
 
 router = APIRouter(tags=["terminals"])
 
@@ -331,7 +335,6 @@ def _lanzar_tipeo_visible(terminal_id: int, corto: str):
     """Dispara el tipeo visible en un hilo daemon: la espera del prompt (hasta
     ~2s con nvm lento) no debe frenar la creación — un batch de 9 terminales
     la pagaría en serie."""
-    import threading
     threading.Thread(target=_tipear_cli_visible, args=(terminal_id, corto),
                      daemon=True, name=f'tipeo-{terminal_id}').start()
 
@@ -457,6 +460,24 @@ def _tipo_ia_de(terminal_id: int) -> Optional[str]:
         row = conn.execute('SELECT tipo_ia FROM terminals WHERE id = ?',
                            (terminal_id,)).fetchone()
         return row['tipo_ia'] if row else None
+    finally:
+        conn.close()
+
+
+def _borrar_terminal_fila(terminal_id: int) -> None:
+    """Borra la fila de una terminal que NO llegó a tener sesión.
+
+    Se usa para revertir la creación cuando el motor no está disponible: sin
+    esto quedaba una terminal activa en la DB sin sesión detrás — visible en la
+    UI, imposible de usar, y sobreviviendo a los reinicios porque el reconcile
+    la trata como "activa que hay que recrear". Sync (lo threadpolea quien llama).
+    """
+    conn = get_db()
+    try:
+        conn.execute('DELETE FROM terminals WHERE id = ?', (terminal_id,))
+        conn.commit()
+    except Exception as e:      # noqa: BLE001 — limpieza best-effort
+        print(f'[terminales] no pude revertir la fila {terminal_id}: {e}')
     finally:
         conn.close()
 
@@ -1495,6 +1516,14 @@ async def crear_terminal(project_id: int, terminal: TerminalCreate):
     # 2. Crear sesión tmux con cwd en el proyecto (no worktree)
     try:
         await _crear_sesion_tmux(terminal_id, project_path)
+    except MotorNoDisponible as e:
+        # No hay motor de terminales en esta máquina. Antes esto se tragaba y
+        # la API contestaba 201: quedaba una fila activa en la DB y una card en
+        # la UI atada a una sesión que NUNCA existió (la "terminal fantasma"),
+        # que después fallaba en cada attach/capture con un 500 sin pistas.
+        # Se revierte la fila y se contesta 503 con el remedio concreto.
+        await asyncio.to_thread(_borrar_terminal_fila, terminal_id)
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
         print(f'[crear_terminal] Error creando sesión tmux: {e}')
 
@@ -1573,6 +1602,13 @@ async def crear_terminales_batch(project_id: int, batch: TerminalBatchCreate):
     for terminal_id in nuevas_ids:
         try:
             await _crear_sesion_tmux(terminal_id, cwd_lote)
+        except MotorNoDisponible as e:
+            # Sin motor no se crea NINGUNA del lote: se revierten todas las
+            # filas (incluidas las que ya se insertaron) y se contesta 503.
+            # Dejarlas era el caso peor — un grid entero de cards fantasma.
+            for tid in nuevas_ids:
+                await asyncio.to_thread(_borrar_terminal_fila, tid)
+            raise HTTPException(status_code=503, detail=str(e)) from e
         except Exception as e:
             print(f'[crear_terminales_batch] Error creando sesión tmux {terminal_id}: {e}')
 
@@ -1587,7 +1623,6 @@ async def crear_terminales_batch(project_id: int, batch: TerminalBatchCreate):
             # empieza con '-' o que contiene nombres de teclas tmux se
             # interpretaba como flags/teclas (argument injection). El Enter va
             # en un send-keys aparte (igual que send_to_agent).
-            sess = f'lanide_{terminal_id}'
             # to_thread: los send-keys son síncronos y bloquearían el event loop
             # por cada terminal del lote (un lote grande con comando inicial
             # congelaba todas las requests/WS hasta terminar). Misma corrección
@@ -2357,6 +2392,12 @@ async def _sesion_control(websocket: WebSocket, terminal_id: int, log_file: str,
             ).stdout
         except subprocess.TimeoutExpired:
             print(f'[control] seed de {session}: tmux no respondió (timeout) — seed vacío')
+            return [], ''
+        except OSError as e:
+            # Sin binario tmux (o PATH roto) el FileNotFoundError subía por el
+            # WS del attach y lo cortaba sin diagnóstico. Seed vacío = la
+            # terminal abre en blanco, que es degradación y no caída.
+            print(f'[control] seed de {session}: no pude ejecutar tmux ({e}) — seed vacío')
             return [], ''
         return info, cap
 

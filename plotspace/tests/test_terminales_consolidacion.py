@@ -2,7 +2,6 @@
 TTL de _preparar_proyecto, kill verificado con target exacto, reconcile de
 zombies (activa=0 con sesión viva) y bindings de copy-mode solo en classic."""
 import asyncio
-import subprocess
 
 from plotspace.routers import terminals as term
 # El motor (kill/has-session y los guards globales) vive ahora en

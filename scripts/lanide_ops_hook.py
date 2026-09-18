@@ -124,7 +124,6 @@ def _http_crudo(puerto, ruta, cuerpo, timeout):
 
     `Connection: close` evita tener que interpretar Content-Length ni chunked:
     se lee hasta que el server cierra."""
-    import socket
     body = json.dumps(cuerpo).encode()
     pedido = (
         f"POST {ruta} HTTP/1.1\r\n"

@@ -8,7 +8,6 @@ lint lo marca). El INDEX se agrupa por categoría y el recall gana una señal.
 """
 import os
 import sys
-import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 

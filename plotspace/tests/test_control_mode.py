@@ -464,7 +464,6 @@ def test_terminar_cancela_esperas_pendientes():
 
 def test_comando_con_respuesta_sobre_cliente_cerrado():
     import asyncio
-    from plotspace.core import control_mode as cm
 
     async def escenario():
         cliente = _cliente_sin_proc()

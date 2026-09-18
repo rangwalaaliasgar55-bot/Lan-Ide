@@ -14,7 +14,6 @@ corte y NO reviven; lo que vuelve es el texto (comandos + salida). El cwd y el
 import asyncio
 import os
 import shlex
-import subprocess
 
 from plotspace.core.database import get_db
 from plotspace.core.terminal_backend import backend

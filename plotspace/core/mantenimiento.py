@@ -9,7 +9,6 @@ la UI (POST /api/workspace/mantenimiento).
 
 `sesiones_huerfanas` es pura y testeable; `ejecutar_mantenimiento` la usa.
 """
-import json
 import asyncio
 import os
 import re

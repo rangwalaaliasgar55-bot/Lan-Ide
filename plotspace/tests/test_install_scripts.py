@@ -11,7 +11,6 @@ tests clavan las decisiones de producto:
   (ese abre un proyecto contra un server que ya corre).
 """
 import os
-import stat
 import subprocess
 
 _RAIZ = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

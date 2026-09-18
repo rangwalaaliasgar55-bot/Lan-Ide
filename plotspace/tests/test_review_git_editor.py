@@ -1,4 +1,3 @@
-import pytest
 
 from plotspace.routers.review import _parse_diff_hunks, _parse_blame
 

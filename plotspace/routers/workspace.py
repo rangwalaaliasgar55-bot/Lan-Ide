@@ -1,9 +1,7 @@
 import asyncio
-import os
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import PlainTextResponse
 
 from plotspace.core.database import get_db
 

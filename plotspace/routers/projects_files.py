@@ -10,7 +10,7 @@ import subprocess
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from typing import List, Optional
+from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
