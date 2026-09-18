@@ -4535,10 +4535,24 @@ document.addEventListener('keydown', (e) => {
 
 // ─── Helpers ──────────────────────────────────────────────────────
 
+// Escapa para interpolar en HTML. Incluye las COMILLAS a propósito.
+//
+// La versión vieja era `d.textContent = str; return d.innerHTML`, que escapa
+// & < > pero NO " ni '. Y `esc()` se usa muchísimo DENTRO de atributos
+// (`title="${esc(x)}"`, `data-slug="${esc(s)}"`). Con un valor que contenga una
+// comilla doble —el nombre de un proyecto, el título de una memoria, una rama
+// de git: todo texto que el usuario o un agente controlan— se cierra el
+// atributo y se inyecta HTML:
+//
+//     nombre = 'x" onmouseover="alert(1)'
+//     `title="${esc(nombre)}"`  →  title="x" onmouseover="alert(1)"
+//
+// Escapando también " y ' el mismo helper sirve para texto y para atributos,
+// que es como ya se estaba usando.
 function esc(str) {
-  const d = document.createElement('div');
-  d.textContent = str;
-  return d.innerHTML;
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
 }
 // Exponer para editor.js (window.LanIdeEditor lo reusa sin duplicar)
 window.esc = esc;

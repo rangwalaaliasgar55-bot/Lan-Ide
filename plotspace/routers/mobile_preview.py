@@ -10,7 +10,6 @@ import asyncio
 import json
 import os
 import re
-import subprocess
 import time
 from typing import Optional
 

@@ -15,7 +15,6 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-import pytest
 from fastapi import HTTPException, UploadFile
 
 from plotspace.routers import voice

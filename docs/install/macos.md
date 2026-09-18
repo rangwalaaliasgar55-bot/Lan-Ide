@@ -8,7 +8,12 @@ curl -fsSL https://raw.githubusercontent.com/rangwalaaliasgar55-bot/Lan-Ide/main
 
 Same script as Linux: full app, `lanide` on your PATH, opens `http://127.0.0.1:3000`.
 
-There is no DMG / notarized app yet. Terminals are **tmux** sessions.
+Terminals are **tmux** sessions.
+
+Want a real window instead of a browser tab? `cd desktop && npm install && npm start`
+builds on the same engine, and `npm run dist:mac` produces a `.dmg`
+(see [desktop/README.md](../../desktop/README.md)). It is **not notarized** and no
+release is published yet, so Gatekeeper needs a right-click → Open the first time.
 
 ## Native (from source, manual)
 

@@ -30,7 +30,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from plotspace.core.database import init_db, get_db
 from plotspace.core.events import broadcaster
+from plotspace.core.preflight import preflight_binarios
 from plotspace.routers import browser, cuentas, fs, live, memory, mobile_preview, radio, review, orchestrator, plugins, projects, projects_files, system, tasks, terminals, voice, workspace
+from plotspace.core import entorno
 
 # Referencias a los background tasks del startup: asyncio solo guarda weakrefs
 # a las tasks, así que sin esto el GC podía recogerlas a mitad de ejecución.
@@ -227,6 +229,14 @@ async def _startup():
     )
 
     lanide_auth.imprimir_banner()
+
+    # 0.55 PREFLIGHT de binarios externos. Lan Ide no es autosuficiente: sin
+    #      tmux no hay UNA sola terminal, y sin git se degradan el review, el
+    #      diff y el STATE.md. Antes esto no se chequeaba en ningún lado y la
+    #      falta se manifestaba mucho después como un 500 opaco al abrir una
+    #      terminal. Se avisa acá, una vez, con el comando exacto para arreglarlo.
+    for _linea in preflight_binarios():
+        print(_linea)
 
     # 0.6 Avisar temprano si falta la API key: sin esto, el primer chat al
     #     orquestador fallaba con un 500 confuso desconectado de la causa.
@@ -578,7 +588,7 @@ _HTML_PAGES = {'/', '/workspace', '/editor'}
 # Tope de tamaño de request (256 MB). Cubre uploads/zip; el editor y la API real
 # mandan payloads chicos. Configurable por env para casos legítimos grandes.
 try:
-    MAX_BODY_BYTES = int(os.environ.get('LAN_IDE_MAX_BODY_MB', '256')) * 1024 * 1024
+    MAX_BODY_BYTES = entorno.entero('LAN_IDE_MAX_BODY_MB', 256, minimo=1) * 1024 * 1024
 except ValueError:
     MAX_BODY_BYTES = 256 * 1024 * 1024
 

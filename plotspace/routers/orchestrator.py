@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import anthropic
-import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -2107,7 +2106,7 @@ async def ejecutar_workflow(workflow_data: dict, project_id: int, count_base: in
     # el trust prompt de Claude Code). Antes era un sleep(5) ciego que mandaba
     # la tarea durante el trust prompt y se perdía.
     if created_terminals:
-        print(f'[workflow] Esperando a que las IAs estén listas...')
+        print('[workflow] Esperando a que las IAs estén listas...')
         await asyncio.gather(*[
             _esperar_agente_listo(t['id'], timeout=25.0) for t in created_terminals
         ])
@@ -2336,18 +2335,33 @@ async def send_to_agent(terminal_id: int, mensaje: str):
     # TMUX decida si envolverlo en bracketed paste según lo que pidió la app.
     # Bonus: el texto nunca pasa por el lookup de nombres de tecla, así que una
     # línea del MAILBOX con 'Enter' o 'C-c' adentro no se interpreta como tecla.
-    err = b''
+    pegado_ok = True
     for argv in comandos_pegar_tarea(session, mensaje):
-        proc = await asyncio.create_subprocess_exec(
-            *argv, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *argv, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+        except OSError as e:
+            # Sin tmux en el PATH esto reventaba con FileNotFoundError y se
+            # llevaba puesto el paso entero del workflow.
+            print(f'[send_to_agent] ERROR: no pude ejecutar tmux ({e})')
+            pegado_ok = False
+            break
         _, e = await proc.communicate()
         if proc.returncode != 0:
-            err = e
             print(f'[send_to_agent] ERROR rc={proc.returncode}: '
                   f'{e.decode(errors="replace").strip()}')
+            pegado_ok = False
             break
     else:
         print(f'[send_to_agent] OK → {session} ({len(mensaje)} chars pegados)')
+
+    # Los Enter SOLO si el texto llegó. Antes se mandaban siempre —incluso tras
+    # un paste fallido—, así que un fallo del buffer se convertía en dos Enter
+    # sueltos contra el prompt del agente: re-ejecutaba lo último que tuviera
+    # tipeado, o aceptaba el diálogo que estuviera abierto. Silencioso y peor
+    # que no hacer nada.
+    if not pegado_ok:
+        return
     backend().enviar_tecla(terminal_id, 'Enter')
 
     # Esperar 1s y enviar Enter adicional para que Claude procese la tarea
@@ -2644,9 +2658,13 @@ async def _tmux_listar_sesiones() -> str:
     try:
         out = '\n'.join(sorted(
             await asyncio.to_thread(backend().listar_sesiones))).encode()
-    except Exception:
-        try: proc.kill()      # timeout → matar el subprocess tmux para no dejarlo huérfano
-        except Exception: pass
+    except Exception as e:
+        # Antes acá había un `proc.kill()` sobre una variable INEXISTENTE
+        # (sobra del día en que esto spawneaba el subprocess a mano): cualquier
+        # fallo del listado levantaba NameError DENTRO del except y se llevaba
+        # puesto el arranque del workflow, en vez de degradar a "no sé qué
+        # sesiones hay" —que es diagnóstico, no un paso crítico—.
+        print(f'[workflow] no pude listar sesiones tmux: {e}')
         return ''
     return out.decode(errors='replace').strip() if out else ''
 

@@ -24,10 +24,11 @@ import asyncio
 import json
 import os
 import shutil
+from plotspace.core import entorno
 
 BIN = 'claude'
 TOOLS_LECTURA = 'Read,Glob,Grep'
-TIMEOUT_S = float(os.environ.get('ORQ_CLI_TIMEOUT', '240'))
+TIMEOUT_S = entorno.decimal('ORQ_CLI_TIMEOUT', 240.0, minimo=1.0)
 
 
 class OrqCliError(RuntimeError):

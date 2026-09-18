@@ -16,7 +16,6 @@ Toggle de plugins por proyecto se persiste en la tabla project_skills:
 import json
 import os
 import re
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel

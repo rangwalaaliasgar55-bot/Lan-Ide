@@ -30,9 +30,11 @@ import re
 
 from plotspace.core.database import get_db
 from plotspace.core import agent_watch
+from plotspace.core import entorno
 
-INTERVALO_S = int(os.getenv('WATCHDOG_INTERVALO_S', '20'))
-UMBRAL_S = int(os.getenv('WATCHDOG_UMBRAL_S', '180'))   # 3 min quieto = sospechoso
+INTERVALO_S = entorno.entero('WATCHDOG_INTERVALO_S', 20, minimo=1)
+# 3 min quieto = sospechoso
+UMBRAL_S = entorno.entero('WATCHDOG_UMBRAL_S', 180, minimo=1)
 
 _ANSI_RE = re.compile(r'\x1b\[[0-9;]*[mGKHFJA-Z]')
 # TASK_* solo-en-línea (mismo filtro que terminals._linea_es_keyword), con grupo

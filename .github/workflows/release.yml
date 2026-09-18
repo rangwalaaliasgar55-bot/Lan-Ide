@@ -12,9 +12,14 @@ on:
         type: boolean
         required: false
         default: false
+  # Se dispara con un TAG, no con un push a una rama. Antes esto colgaba de
+  # `branches: [arena/01a0a44f-lan-ide]` — una rama de trabajo ya mergeada—, así
+  # que cada push a esa rama publicaba un Release PÚBLICO y le movía el `latest`
+  # a los usuarios con un build intermedio. Un release sale cuando alguien
+  # etiqueta una versión, que es un acto deliberado.
   push:
-    branches:
-      - arena/01a0a44f-lan-ide
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -29,8 +34,12 @@ jobs:
       - name: Resolve release tag
         shell: pwsh
         run: |
+          # En un push de tag, el tag ES la referencia (refs/tags/vX.Y.Z). Caer
+          # al default hardcodeado acá publicaría el build bajo una versión
+          # ajena y le pisaría los assets a un release ya publicado.
           $tag = '${{ github.event.inputs.tag }}'
-          if (-not $tag) { $tag = 'v1.7.3' }
+          if (-not $tag) { $tag = '${{ github.ref_name }}' }
+          if (-not $tag) { throw 'no se pudo resolver el tag del release' }
           $pre = '${{ github.event.inputs.prerelease }}'
           if (-not $pre) { $pre = 'false' }
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append

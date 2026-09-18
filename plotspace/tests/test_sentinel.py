@@ -2,7 +2,6 @@
 import json
 import os
 import tempfile
-import time
 
 import plotspace.core.sentinel as sen
 

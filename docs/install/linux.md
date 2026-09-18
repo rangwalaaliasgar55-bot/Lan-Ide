@@ -10,7 +10,11 @@ That clones to `~/lan-ide`, puts `lanide` on your PATH (`~/.local/bin`), and ope
 
 Already cloned? `./install.sh` from the repo root. `--no-start` skips launching the server. `--dry-run` prints the plan.
 
-No `.deb` / AppImage yet. Terminals are **tmux** sessions.
+Terminals are **tmux** sessions.
+
+Want a real window instead of a browser tab? `cd desktop && npm install && npm start`
+builds on the same engine, and `npm run dist:linux` produces an AppImage and a `.deb`
+(see [desktop/README.md](../../desktop/README.md)). Neither is published as a release yet.
 
 ## Native (from source, manual)
 

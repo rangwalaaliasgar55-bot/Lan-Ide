@@ -81,3 +81,36 @@ plotspace = ["../frontend/**/*"]
 # La versión sale del archivo VERSION vía plotspace.__version__ (que lo lee y
 # hace strip del \n final). Una sola fuente de verdad, imposible de divergir.
 version = { attr = "plotspace.__version__" }
+
+# ─── Ruff ────────────────────────────────────────────────────────────────────
+# Este repo NO usa un formateador ni enforcea estilo: tiene convención propia
+# (comentarios largos que explican el PORQUÉ, nombres en español) y un linter
+# opinado encima solo generaría ruido en cada PR.
+#
+# Lo que SÍ se chequea es lo que es un BUG: un nombre indefinido que revienta
+# recién cuando se entra al `except`, un import muerto, una redefinición que
+# tapa a la anterior. De ese set salió el `proc.kill()` sobre una variable
+# inexistente en el handler de errores de los workflows.
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["frontend/vendor", "desktop/node_modules", "venv", ".venv"]
+
+[tool.ruff.lint]
+select = [
+  "F",      # pyflakes: indefinidos, imports muertos, redefiniciones
+  "E9",     # errores de sintaxis / IO
+  "B002", "B003", "B004", "B005", "B006", "B012", "B014", "B015",
+  "B017", "B018", "B019", "B020", "B021", "B022", "B023", "B025",
+  "B029", "B030", "B031", "B032", "B033", "B034",
+  "PLE",    # pylint: errores, no opiniones
+]
+ignore = [
+  # Los tests asignan resultados que no usan para documentar la forma de la
+  # respuesta; no es un bug y tacharlo empeora la lectura.
+  "F841",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# `from x import *` en el puente de compatibilidad: es su razón de existir.
+"backend/main.py" = ["F403", "F405"]

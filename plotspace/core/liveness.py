@@ -31,7 +31,6 @@ DOCTRINA: FALLA ABIERTA. Sin dato NO se declara muerto a nadie. Enterrar a un
 agente vivo es mucho peor que tardar en enterrar a uno muerto: le liberaríamos
 el territorio y otro le pisaría el trabajo en curso.
 """
-import subprocess
 import time
 from plotspace.core.terminal_backend import backend
 

@@ -24,6 +24,7 @@ from typing import Optional
 
 from plotspace.core.database import get_db
 from plotspace.core.datadir import ruta_data
+from plotspace.core import entorno
 
 LECCIONES_BASENAME = 'lecciones-del-enjambre.md'
 ESTADO_PATH  = ruta_data('memoria-lecciones.json')
@@ -35,7 +36,7 @@ MODELO  = os.environ.get('MEMORIA_LECCIONES_MODEL', 'claude-haiku-4-5')
 
 def _umbral_default() -> int:
     try:
-        return max(1, int(os.environ.get('MEMORIA_LECCIONES_UMBRAL', '6')))
+        return max(1, entorno.entero('MEMORIA_LECCIONES_UMBRAL', 6))
     except ValueError:
         return 6
 
@@ -346,7 +347,12 @@ def lecciones_de_memorias(project_path: str, k: int = 12) -> list:
         tags = [t.strip().lower() for t in mt.group(1).split(',')] if mt else []
         if 'leccion' not in tags:
             continue
-        def campo(key):
+        # `front=front` ata el frontmatter de ESTA vuelta al closure. Hoy
+        # funciona igual porque `campo` se usa dentro de la misma iteración,
+        # pero la captura por referencia es una bomba de tiempo: el día que
+        # alguien guarde estos closures para llamarlos después, todos leerían
+        # el frontmatter del ÚLTIMO archivo del loop.
+        def campo(key, front=front):
             mm = _CAMPO_LECC_RE[key].search(front)
             return mm.group(1).strip() if mm else ''
         estado = campo('estado').lower() or 'vigente'

@@ -1,5 +1,4 @@
 import sqlite3
-import os
 from datetime import datetime
 
 # Ruta de la base de datos (en el data dir activo — ver core/datadir.py)

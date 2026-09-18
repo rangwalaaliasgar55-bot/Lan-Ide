@@ -7,7 +7,6 @@ en frío y `--resume <uuid>` si su transcript (`<uuid>.jsonl`) ya está en disco
 El borrado explícito (✕ → activa=0) NUNCA se reanuda: reconciliar solo resucita
 activa=1. Ver [[persistencia-resume-terminales]]."""
 import asyncio
-import os
 from unittest import mock
 
 from plotspace.routers import terminals as term
@@ -183,8 +182,11 @@ def test_snapshot_no_pisa_con_pane_vacio(tmp_path, monkeypatch):
     snap = ts.ruta_snapshot(str(tmp_path), 5)
     with open(snap, 'w') as f:
         f.write('HISTORIAL_BUENO\n')
-    monkeypatch.setattr(ts.subprocess, 'run',
-                        lambda *a, **k: type('R', (), {'stdout': '  \n \n'})())
+    # El capture va por el MOTOR (backend().capturar), no por subprocess: este
+    # test pinchaba `ts.subprocess`, un seam que ya no existía — y por eso
+    # pasaba sin ejercitar nada (el patch fallaba antes de llegar al assert).
+    monkeypatch.setattr(ts, 'backend',
+                        lambda: type('M', (), {'capturar': lambda *a, **k: '  \n \n'})())
     ts._snapshot_uno(5, str(tmp_path))
     with open(snap) as f:
         assert 'HISTORIAL_BUENO' in f.read()

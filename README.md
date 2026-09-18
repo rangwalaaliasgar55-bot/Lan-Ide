@@ -47,6 +47,24 @@ Engine runs in [WSL2](docs/install/windows.md). One reboot if WSL is new. Leaves
 
 Full app (terminals, voice, preview, Mobile Studio, …). Link your own CLIs in ⚙ → Accounts. Docker: `cp .env.example .env && docker compose up -d --build` (large, experimental).
 
+Something not working? [Troubleshooting](docs/troubleshooting.md) — or ask the
+engine directly: `curl -s localhost:3000/api/system/preflight`.
+
+### Desktop app
+
+Prefer a real window over a browser tab:
+
+```bash
+cd desktop && npm install && npm start
+```
+
+It starts the engine for you and **stops it when you close the window** — no
+orphan process holding port 3000 — and if the engine can't start it tells you
+why, with the fix, instead of an `ERR_CONNECTION_REFUSED` page. If you already
+have one running (`lanide`), it attaches to it and leaves it alone on quit.
+Package it with `npm run dist:linux` / `dist:mac` / `dist:win`. See
+[desktop/README.md](desktop/README.md).
+
 ---
 
 ### Start here

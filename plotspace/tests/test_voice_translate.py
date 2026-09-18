@@ -9,7 +9,6 @@ Cubrimos:
   1. _whisper_kwargs(translate) — la lógica PURA que elige el task.
   2. El endpoint /transcribe cablea el form field `translate` hasta esos kwargs.
 """
-import io
 import os
 import sys
 

@@ -9,7 +9,7 @@
   let _projectId = null;
   let _data = null;
 
-  const esc = (s) => { const d = document.createElement('div'); d.textContent = String(s ?? ''); return d.innerHTML; };
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const _t = (s) => (window.LanIdeI18n && window.LanIdeI18n.t) ? window.LanIdeI18n.t(s) : s;
 
   const _pane = () => document.getElementById('jw-pane-review');
