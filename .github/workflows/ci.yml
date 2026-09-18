@@ -56,12 +56,23 @@ jobs:
           cache: pip
       - name: Install Python deps
         run: pip install -r packaging/requirements-base.txt pytest
-      # SIN instalar tmux, a propósito. tmux es el motor de terminales y su
-      # ausencia provocaba 500s opacos, terminales fantasma en la DB y un
-      # traceback por segundo en los pollers. Este job es el que impide que esa
-      # regresión vuelva: en el runner de arriba tmux SIEMPRE está, así que el
-      # camino degradado no se ejercitaba nunca.
-      - name: No debe haber tmux en este job
+      # SIN tmux, a propósito. tmux es el motor de terminales y su ausencia
+      # provocaba 500s opacos, terminales fantasma en la DB y un traceback por
+      # segundo en los pollers. Este job es el que impide que esa regresión
+      # vuelva: en el job de arriba tmux SIEMPRE está, así que el camino
+      # degradado no se ejercitaba nunca.
+      #
+      # Hay que DESINSTALARLO: la imagen de ubuntu-latest lo trae de fábrica, así
+      # que "no lo instalo" no alcanza — era lo que hacía este job, y pasaba en
+      # verde ejercitando el camino con motor, justo lo contrario de su razón de
+      # existir. Se borra el binario en vez de `apt remove` para no depender de
+      # la red ni de que el paquete se llame igual en la imagen del runner.
+      - name: Desinstalar tmux
+        run: |
+          while command -v tmux >/dev/null 2>&1; do
+            sudo rm -f "$(command -v tmux)"
+          done
+      - name: Verificar que no quedó tmux
         run: '! command -v tmux'
       - name: Suite completa sin motor
         run: python -m pytest plotspace/tests/ -q
