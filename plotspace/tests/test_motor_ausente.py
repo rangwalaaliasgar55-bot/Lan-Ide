@@ -201,3 +201,45 @@ def test_endpoints_de_lectura_no_tiran_500(monkeypatch, tmp_path):
                 '/api/terminals/1/status',
                 '/api/terminals/1/snapshot'):
         assert cli.get(url).status_code < 500, f'{url} contestó 5xx sin tmux'
+
+
+# ─── El WebSocket de la terminal ─────────────────────────────────────────────
+
+def _terminal(pid: int) -> int:
+    from plotspace.core.database import get_db
+    conn = get_db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO terminals (project_id, nombre, tipo_ia, activa, '
+            "fecha_creacion, session_uuid) VALUES (?, 't1', 'manual', 1, "
+            "'2026-01-01', 'uuid-test')", (pid,))
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def test_ws_cierra_con_mensaje_en_vez_de_reventar(monkeypatch, tmp_path):
+    """El bug: `MotorNoDisponible` se escapaba del handler del WS.
+
+    ASGI lo traducía a un cierre 1011 pelado, el browser mostraba 'conexión
+    perdida' y reintentaba PARA SIEMPRE — un traceback por reintento en el
+    server y cero pistas para el usuario. Ahora el motivo viaja por el propio
+    stream de la terminal (que es donde el usuario está mirando) y el cierre
+    es explícito con 4503, que el cliente distingue de una caída de red.
+    """
+    cli = _cliente(monkeypatch)
+    pid = _proyecto(tmp_path)
+    tid = _terminal(pid)
+
+    with cli.websocket_connect(f'/ws/terminal/{tid}') as ws:
+        texto = ws.receive()['text']
+        cierre = ws.receive()
+
+    # El remedio tiene que llegar escrito en la terminal.
+    assert 'tmux' in texto
+    assert 'install' in texto
+    # Y el cierre tiene que ser deliberado, no un 1011 de crash.
+    assert cierre['type'] == 'websocket.close'
+    assert cierre['code'] == 4503

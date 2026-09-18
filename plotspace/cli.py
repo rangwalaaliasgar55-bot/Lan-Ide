@@ -40,11 +40,34 @@ def _abrir_cuando_responda(url: str, espera: float = 30.0):
     print(f'[lanide] el motor no respondió en {espera:.0f}s — abrilo a mano: {url}')
 
 
+def _puerto_env(valor: str, defecto: int = 3000) -> int:
+    """LAN_IDE_PORT → int, tolerando basura.
+
+    Antes esto era un `int(os.environ.get(...))` pelado dentro del parser: con
+    `LAN_IDE_PORT=` (vacío, que es lo que deja un `export` mal escrito o un
+    docker-compose con la variable sin definir) el comando `lanide` moría con
+    un ValueError y un traceback, ANTES de imprimir siquiera el --help. Un
+    valor inválido no puede impedir arrancar: se avisa y se usa el default.
+    """
+    crudo = (valor or '').strip()
+    if not crudo:
+        return defecto
+    try:
+        puerto = int(crudo)
+    except ValueError:
+        print(f'[lanide] LAN_IDE_PORT={crudo!r} no es un número — uso {defecto}')
+        return defecto
+    if not (1 <= puerto <= 65535):
+        print(f'[lanide] LAN_IDE_PORT={puerto} fuera de rango (1-65535) — uso {defecto}')
+        return defecto
+    return puerto
+
+
 def construir_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog='lanide',
         description='Lan Ide — tu flota de agentes de código, en una app.')
-    p.add_argument('--puerto', type=int, default=int(os.environ.get('LAN_IDE_PORT', 3000)))
+    p.add_argument('--puerto', type=int, default=_puerto_env(os.environ.get('LAN_IDE_PORT', '')))
     # 127.0.0.1 y NO 0.0.0.0: el default no puede exponer a toda la red local
     # una app que ejecuta comandos arbitrarios. Quien quiera entrar desde el
     # celular lo pide explícito.

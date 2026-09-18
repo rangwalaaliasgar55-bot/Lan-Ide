@@ -24,6 +24,7 @@ from typing import Optional
 
 from plotspace.core.database import get_db
 from plotspace.core.datadir import ruta_data
+from plotspace.core import entorno
 
 LECCIONES_BASENAME = 'lecciones-del-enjambre.md'
 ESTADO_PATH  = ruta_data('memoria-lecciones.json')
@@ -35,7 +36,7 @@ MODELO  = os.environ.get('MEMORIA_LECCIONES_MODEL', 'claude-haiku-4-5')
 
 def _umbral_default() -> int:
     try:
-        return max(1, int(os.environ.get('MEMORIA_LECCIONES_UMBRAL', '6')))
+        return max(1, entorno.entero('MEMORIA_LECCIONES_UMBRAL', 6))
     except ValueError:
         return 6
 

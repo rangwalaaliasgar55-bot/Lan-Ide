@@ -32,6 +32,7 @@ from plotspace.core.database import init_db, get_db
 from plotspace.core.events import broadcaster
 from plotspace.core.preflight import preflight_binarios
 from plotspace.routers import browser, cuentas, fs, live, memory, mobile_preview, radio, review, orchestrator, plugins, projects, projects_files, system, tasks, terminals, voice, workspace
+from plotspace.core import entorno
 
 # Referencias a los background tasks del startup: asyncio solo guarda weakrefs
 # a las tasks, así que sin esto el GC podía recogerlas a mitad de ejecución.
@@ -587,7 +588,7 @@ _HTML_PAGES = {'/', '/workspace', '/editor'}
 # Tope de tamaño de request (256 MB). Cubre uploads/zip; el editor y la API real
 # mandan payloads chicos. Configurable por env para casos legítimos grandes.
 try:
-    MAX_BODY_BYTES = int(os.environ.get('LAN_IDE_MAX_BODY_MB', '256')) * 1024 * 1024
+    MAX_BODY_BYTES = entorno.entero('LAN_IDE_MAX_BODY_MB', 256, minimo=1) * 1024 * 1024
 except ValueError:
     MAX_BODY_BYTES = 256 * 1024 * 1024
 

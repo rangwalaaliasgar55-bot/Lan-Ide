@@ -15,6 +15,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, WebSocket, WebSo
 from fastapi.websockets import WebSocketState
 from pydantic import BaseModel
 
+from plotspace.core import entorno
 from plotspace.core.database import get_db
 from plotspace.core.terminal_backend import (
     EspecSesion,
@@ -1065,8 +1066,8 @@ async def reconciliar_sesiones_tmux():
         # (2) trickle entre creaciones para no saturar la CPU — los de fondo
         # arrancan de a poco. Las sesiones que el WS ya creó se saltan (idempotente).
         try:
-            inicio = float(os.environ.get('RECONCILE_INICIO', '2.5'))
-            gap    = float(os.environ.get('RECONCILE_GAP', '2.5'))
+            inicio = entorno.decimal('RECONCILE_INICIO', 2.5, minimo=0.0)
+            gap    = entorno.decimal('RECONCILE_GAP', 2.5, minimo=0.0)
         except ValueError:
             inicio, gap = 2.5, 2.5
         await asyncio.sleep(inicio)
@@ -1753,7 +1754,7 @@ MAX_UPLOAD_BYTES = 15 * 1024 * 1024      # tope de la imagen ya decodificada (15
 # quedar por DEBAJO de LAN_IDE_MAX_BODY_MB (256 default, main.py): el middleware
 # global corta el body entero antes si se supera.
 try:
-    MAX_VIDEO_BYTES = int(os.environ.get('LAN_IDE_MAX_VIDEO_MB', '200')) * 1024 * 1024
+    MAX_VIDEO_BYTES = entorno.entero('LAN_IDE_MAX_VIDEO_MB', 200, minimo=1) * 1024 * 1024
 except ValueError:
     MAX_VIDEO_BYTES = 200 * 1024 * 1024
 _UPLOAD_TTL_SEG  = 24 * 3600             # borrar uploads más viejos que esto al subir uno nuevo
@@ -2060,7 +2061,21 @@ async def ws_terminal(websocket: WebSocket, terminal_id: int,
     # sesión él, igual debe arrancar el CLI en modo RESUME — si no, codex/qwen/
     # opencode/agy volvían SIN su conversación (claude decide por el .jsonl en
     # disco, pero los otros dependen de este flag). Ver reconciliar_sesiones_tmux.
-    await _crear_sesion_tmux(terminal_id, project_path, es_reanudacion=True)
+    try:
+        await _crear_sesion_tmux(terminal_id, project_path, es_reanudacion=True)
+    except MotorNoDisponible as e:
+        # Sin tmux no hay terminal posible. Antes esto se escapaba del handler:
+        # ASGI cerraba el socket con 1011 y el browser mostraba "conexión
+        # perdida" + reintentaba para siempre, mientras el server escupía un
+        # traceback por reintento. Decirlo EN la terminal es la única forma de
+        # que el usuario vea el comando que lo arregla.
+        try:
+            await websocket.send_text(
+                f"\r\n\x1b[31m{e}\x1b[0m\r\n")
+            await websocket.close(code=4503, reason='motor-no-disponible')
+        except Exception:
+            pass
+        return
 
     # Carrera contra eliminar_terminal: si la terminal fue borrada (activa=0)
     # mientras preparábamos el proyecto / creábamos la sesión, _crear_sesion_tmux

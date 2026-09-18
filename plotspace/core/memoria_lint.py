@@ -25,6 +25,7 @@ import unicodedata
 from datetime import date
 
 from plotspace.core import memoria_categorias as mcat
+from plotspace.core import entorno
 
 _WIKILINK_RE = re.compile(r'\[\[([^\]\n]+)\]\]')
 _SLUG_LIMPIO = re.compile(r'[^a-z0-9]+')
@@ -65,7 +66,7 @@ _DUP_UMBRAL = 0.5
 # Cuarentena: vieja sin refresco ni uso registrado → re-verificar o archivar.
 def _dias_cuarentena() -> int:
     try:
-        return max(1, int(os.environ.get('MEMORIA_CUARENTENA_DIAS', '60')))
+        return max(1, entorno.entero('MEMORIA_CUARENTENA_DIAS', 60))
     except ValueError:
         return 60
 # Ruta relativa tipo `plotspace/core/x.py` (2+ segmentos, extensión de código/doc)

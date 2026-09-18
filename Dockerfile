@@ -4,20 +4,19 @@
 # Lan Ide — imagen Docker v1 (COMPLETA y funcional out-of-the-box).
 #
 # Incluye TODAS las deps de plotspace/requirements.txt, también las pesadas:
-# openai-whisper + torch (STT) y playwright + chromium (browser remoto del Web
-# Preview). El código las importa en runtime —voice.py/main.py precargan Whisper,
-# remote_browser.py importa Playwright— y hoy crashea sin ellas, así que v1 las
-# trae todas. Resultado: imagen grande (varios GB) pero que arranca y funciona
-# sin pasos manuales.
-#   TODO v2: capa opcional liviana (imports lazy + variante sin whisper/torch
-#            ni chromium para quien solo quiere orquestar terminales).
+# el STT (onnx-asr / faster-whisper) y playwright + chromium (browser remoto del
+# Web Preview). El código las importa en runtime —voice.py/main.py precargan el
+# STT, remote_browser.py importa Playwright— así que v1 las trae todas y la
+# imagen arranca y funciona sin pasos manuales.
+#   TODO v2: capa opcional liviana (imports lazy + variante sin STT ni chromium
+#            para quien solo quiere orquestar terminales).
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Base: el proyecto corre Python 3.14 (host verificado: 3.14.4). python:3.14-slim
 # existe en Docker Hub desde el release de 3.14 (oct-2025). Si en tu registro NO
 # estuviera disponible, cambiá a `python:3.13-slim` — el código no usa nada
-# exclusivo de 3.14 (pero torch/whisper SÍ necesitan wheels para esa versión;
-# ver README → "Avisos del build").
+# exclusivo de 3.14 (pero onnxruntime y CTranslate2 SÍ necesitan wheels para esa
+# versión; ver README → "Avisos del build").
 FROM python:3.14-slim
 
 # PYTHONUNBUFFERED es crítico acá: el TOKEN DE ACCESO se imprime en el arranque y
@@ -86,15 +85,13 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
 # cambio de código (paso 5) no la invalida.
 COPY plotspace/requirements.txt /app/plotspace/requirements.txt
 
-# torch primero desde el índice CPU de PyTorch: el `pip install torch` por defecto
-# en Linux baja la build con CUDA (varios GB de libs de GPU INÚTILES en un
-# contenedor sin GPU). Pre-instalar la build +cpu hace que openai-whisper la
-# encuentre ya satisfecha y no arrastre la de CUDA. Si el índice CPU no tuviera
-# la wheel para esta versión de Python, el `||` cae al índice default (build más
-# pesada, pero el build NO falla).
+# SIN torch, a propósito. Este RUN pre-instalaba torch desde el índice CPU
+# porque el STT era openai-whisper, que lo arrastra. Ya NO: requirements.txt
+# migró a onnx-asr (motor default) y faster-whisper (vía de escape) —
+# CTranslate2/onnxruntime, sin libtorch. El pre-install quedó huérfano y metía
+# ~800 MB de wheels que después nadie importa, más el riesgo de que un fallo
+# del índice de PyTorch volteara un build que no lo necesita.
 RUN python -m pip install --upgrade pip \
-    && ( pip install "torch" --index-url https://download.pytorch.org/whl/cpu \
-         || pip install "torch" ) \
     && pip install -r /app/plotspace/requirements.txt
 
 # ─── 4. Chromium para el browser remoto (Playwright) ───────────────────────────

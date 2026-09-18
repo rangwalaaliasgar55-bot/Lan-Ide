@@ -32,12 +32,13 @@ from plotspace.core.datadir import ruta_data
 from plotspace.core.events import broadcaster
 from plotspace.core import pane_capture
 from plotspace.core.terminal_backend import backend, TODO_EL_SCROLLBACK
+from plotspace.core import entorno
 
 # Puerto del propio LanIde: las URLs a este puerto en los panes suelen ser
 # referencias al dashboard (curl a la API, instrucciones de tareas), no un dev
 # server del proyecto — y además uvicorn ya lo ocupa, nada más puede bindearlo.
 # En modo app el shell lo elige dinámico vía LAN_IDE_PORT (default histórico 3000).
-PUERTO_LAN_IDE = int(os.environ.get('LAN_IDE_PORT', '3000'))
+PUERTO_LAN_IDE = entorno.entero('LAN_IDE_PORT', 3000, minimo=1, maximo=65535)
 
 # Metro (Expo): en proyectos Expo lo maneja Mobile Preview, no el Web Preview.
 PUERTO_METRO = 8081

@@ -16,11 +16,12 @@ Host/puerto se pueden override con LAN_IDE_HOST / LAN_IDE_PORT.
 import os
 
 import uvicorn
+from plotspace.core import entorno
 
 if __name__ == '__main__':
     uvicorn.run(
         'plotspace.main:app',
         host=os.environ.get('LAN_IDE_HOST', '0.0.0.0'),
-        port=int(os.environ.get('LAN_IDE_PORT', '3000')),
+        port=entorno.entero('LAN_IDE_PORT', 3000, minimo=1, maximo=65535),
         loop='asyncio',
     )
